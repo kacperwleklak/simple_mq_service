@@ -1,0 +1,20 @@
+{application, erlmq,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {erlmq_app, []}},
+  {applications, [
+   kernel,stdlib
+   ]},
+  {env,[
+   {app_port, 8080},
+   {db_host, "localhost"},
+   {db_login, "root"},
+   {db_password, "root"},
+   {db_database, "local"},
+   {db_port, 27017}]},
+  {modules, []},
+
+  {licenses, ["Apache 2.0"]},
+  {links, []}
+ ]}.
