@@ -59,6 +59,14 @@ handle_cast(pub, S = #state{id=Id}) ->
     {noreply, S#state{state={messaging_pub}}}.
 
 %% Handle infos
+
+handle_info({tcp, _Socket, "quit"++_}, S = #state{state={messaging_sub}}) ->
+    gen_event:notify(subscription_handler, {unregister_subscriber, self()}),
+    {stop, normal, S};
+
+handle_info({tcp, _Socket, "quit"++_}, S) ->
+    {stop, normal, S};
+
 handle_info({tcp, _Socket, Str}, S = #state{state=id}) ->
     Id = line(Str),
     io:fwrite("Clients id is ~s!~n", [Id]),
@@ -119,13 +127,14 @@ handle_info({tcp, Socket, _}, S = #state{socket=Socket, state={messaging_req}, i
     Request = #{to_bin("queue") => to_bin(Queue)},
     io:fwrite("Request from ~s!~n", [ID]),
     {true, Response} = gen_event:call(mongo_handler, mongo_event_handler, {get_and_delete, "messages", Request}),
-    #{ <<"value">> := Value = #{<<"content">> := Message}} = Response,
+    #{ <<"value">> := Value} = Response,
     case Value of
-        #{<<"content">> := Message} ->
-            gen_event:call(mongo_handler, mongo_event_handler, {insert, "messages_archive", Value}),
-            send(Socket, "~s", [binary_to_list(Message)]);
+        undefined ->
+            send(Socket, "Queue is empty!", []);
         _ ->
-            send(Socket, "Queue is empty!", [])
+            #{<<"content">> := Message} = Value,
+            gen_event:call(mongo_handler, mongo_event_handler, {insert, "messages_archive", Value}),
+            send(Socket, "~s", [binary_to_list(Message)])
     end,
     {noreply, S};
 
@@ -140,9 +149,6 @@ handle_info({tcp, Socket, Str}, S = #state{socket = Socket, state={messaging_pub
     send(Socket, "Message received!", []),
     {noreply, S};
 
-handle_info({tcp, _Socket, "quit"++_}, S = #state{state={messaging_sub}}) ->
-    gen_event:notify(subscription_handler, {unregister_subscriber, self()}),
-    {stop, normal, S};
 handle_info({tcp_closed, _Socket}, S = #state{state={messaging_sub}}) ->
     gen_event:notify(subscription_handler, {unregister_subscriber, self()}),
     {stop, normal, S};
@@ -155,8 +161,6 @@ handle_info({notify, {subscription, Message, Queue}}, S = #state{socket=Socket, 
     send(Socket, "~s", [Message]),
     {noreply, S};
 
-handle_info({tcp, _Socket, "quit"++_}, S) ->
-    {stop, normal, S};
 handle_info({tcp_closed, _Socket}, S) ->
     {stop, normal, S};
 handle_info({tcp_error, _Socket, _}, S) ->
